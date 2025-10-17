@@ -1,0 +1,5 @@
+# Ignore application secrets
+src/main/resources/application.properties
+
+# Ignore build output
+target/
