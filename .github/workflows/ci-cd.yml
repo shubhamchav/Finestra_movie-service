@@ -97,6 +97,7 @@ jobs:
           
             echo "Running new container..."
             docker run -d --name movie-service \
+              -e DB_URL=$DB_URL\
               -e DB_USERNAME=$DB_USERNAME \
               -e DB_PASSWORD=$DB_PASSWORD \
               -e JWT_SECRET=$JWT_SECRET \
