@@ -87,7 +87,6 @@ jobs:
             docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
             echo "Running new container..."
-            echo "DB_URL='$DB_URL'"
             docker run -d --name movie-service \
               -e DB_URL="$DB_URL" \
               -e DB_USERNAME="$DB_USERNAME" \
