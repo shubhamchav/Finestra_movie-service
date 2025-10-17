@@ -115,7 +115,6 @@ jobs:
               -e JWT_SECRET="$JWT_SECRET" \
               -e AWS_ACCESS_KEY="$AWS_ACCESS_KEY" \
               -e AWS_SECRET_KEY="$AWS_SECRET_KEY" \
-              --restart unless-stopped \
               -p 8080:8080 \
               $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
