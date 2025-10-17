@@ -13,6 +13,7 @@ jobs:
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
       AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
       AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -53,11 +54,50 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # Install AWS CLI and Docker if not installed
+            if ! command -v aws &> /dev/null; then
+              echo "Installing AWS CLI..."
+              sudo apt update -y
+              sudo apt install -y awscli
+            fi
+
+            if ! command -v docker &> /dev/null; then
+              echo "Installing Docker..."
+              sudo apt update -y
+              sudo apt install -y docker.io
+              sudo systemctl enable docker
+              sudo systemctl start docker
+              sudo usermod -aG docker $USER
+            fi
+
+            # Configure AWS CLI credentials
+            aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY }}
+            aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_KEY }}
+            aws configure set default.region ${{ secrets.AWS_REGION }}
+
+            # Define variables
             ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
             ECR_REPOSITORY="${{ secrets.ECR_REPOSITORY }}"
+
+            # Login to ECR and deploy container
+            echo "Logging in to Amazon ECR..."
             aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+            echo "Stopping and removing old container..."
             docker stop movie-service || true
             docker rm movie-service || true
-            docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:latest || true
+
+            echo "Pulling latest image from ECR..."
             docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
-            docker run -d --name movie-service -e DB_USERNAME=$DB_USERNAME -e DB_PASSWORD=$DB_PASSWORD -e JWT_SECRET=$JWT_SECRET -e AWS_ACCESS_KEY=$AWS_ACCESS_KEY -e AWS_SECRET_KEY=$AWS_SECRET_KEY -p 8080:8080 $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+            echo "Running new container..."
+            docker run -d --name movie-service \
+              -e DB_USERNAME=$DB_USERNAME \
+              -e DB_PASSWORD=$DB_PASSWORD \
+              -e JWT_SECRET=$JWT_SECRET \
+              -e AWS_ACCESS_KEY=$AWS_ACCESS_KEY \
+              -e AWS_SECRET_KEY=$AWS_SECRET_KEY \
+              -p 8080:8080 \
+              $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+            echo "✅ Deployment complete!"
