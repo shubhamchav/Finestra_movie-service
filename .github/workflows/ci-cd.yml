@@ -24,12 +24,27 @@ jobs:
           java-version: '17'
 
       - name: Build movie-service
-        run: |
-          mvn clean package -DskipTests
+        run: mvn clean package -DskipTests
 
-      - name: Docker build image
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to ECR
+        env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
         run: |
-          docker build -t movie-service:latest .
+          docker build -t $ECR_REPOSITORY:latest .
+          docker tag $ECR_REPOSITORY:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
@@ -38,8 +53,11 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
+            ECR_REPOSITORY="${{ secrets.ECR_REPOSITORY }}"
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
             docker stop movie-service || true
             docker rm movie-service || true
-            docker rmi movie-service:latest || true
-            # Pull or copy new image if needed
-            docker run -d --name movie-service -e DB_USERNAME=$DB_USERNAME -e DB_PASSWORD=$DB_PASSWORD -e JWT_SECRET=$JWT_SECRET -e AWS_ACCESS_KEY=$AWS_ACCESS_KEY -e AWS_SECRET_KEY=$AWS_SECRET_KEY -p 8080:8080 movie-service:latest
+            docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:latest || true
+            docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
+            docker run -d --name movie-service -e DB_USERNAME=$DB_USERNAME -e DB_PASSWORD=$DB_PASSWORD -e JWT_SECRET=$JWT_SECRET -e AWS_ACCESS_KEY=$AWS_ACCESS_KEY -e AWS_SECRET_KEY=$AWS_SECRET_KEY -p 8080:8080 $ECR_REGISTRY/$ECR_REPOSITORY:latest
