@@ -54,13 +54,18 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Install AWS CLI and Docker if not installed
+            # Install AWS CLI (official method)
             if ! command -v aws &> /dev/null; then
               echo "Installing AWS CLI..."
               sudo apt update -y
-              sudo apt install -y awscli
+              sudo apt install -y unzip curl
+              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              unzip awscliv2.zip
+              sudo ./aws/install
+              aws --version
             fi
-
+          
+            # Install Docker if not present
             if ! command -v docker &> /dev/null; then
               echo "Installing Docker..."
               sudo apt update -y
@@ -69,27 +74,27 @@ jobs:
               sudo systemctl start docker
               sudo usermod -aG docker $USER
             fi
-
+          
             # Configure AWS CLI credentials
             aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY }}
             aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_KEY }}
             aws configure set default.region ${{ secrets.AWS_REGION }}
-
+          
             # Define variables
             ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
             ECR_REPOSITORY="${{ secrets.ECR_REPOSITORY }}"
-
+          
             # Login to ECR and deploy container
             echo "Logging in to Amazon ECR..."
             aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
-
+          
             echo "Stopping and removing old container..."
             docker stop movie-service || true
             docker rm movie-service || true
-
+          
             echo "Pulling latest image from ECR..."
             docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
+          
             echo "Running new container..."
             docker run -d --name movie-service \
               -e DB_USERNAME=$DB_USERNAME \
@@ -99,5 +104,5 @@ jobs:
               -e AWS_SECRET_KEY=$AWS_SECRET_KEY \
               -p 8080:8080 \
               $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
+          
             echo "✅ Deployment complete!"
