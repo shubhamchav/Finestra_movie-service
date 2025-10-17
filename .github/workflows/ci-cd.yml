@@ -48,9 +48,6 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # -----------------------------
-            # Assign secrets to shell variables
-            # -----------------------------
             DB_URL="${{ secrets.DB_URL }}"
             DB_USERNAME="${{ secrets.DB_USERNAME }}"
             DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
@@ -59,10 +56,7 @@ jobs:
             AWS_SECRET_KEY="${{ secrets.AWS_SECRET_KEY }}"
             ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
             ECR_REPOSITORY="${{ secrets.ECR_REPOSITORY }}"
-
-            # -----------------------------
-            # Install AWS CLI if not present
-            # -----------------------------
+            
             if ! command -v aws &> /dev/null; then
               echo "Installing AWS CLI..."
               sudo apt update -y
@@ -73,9 +67,6 @@ jobs:
               aws --version
             fi
 
-            # -----------------------------
-            # Install Docker if not present
-            # -----------------------------
             if ! command -v docker &> /dev/null; then
               echo "Installing Docker..."
               sudo apt update -y
@@ -85,30 +76,18 @@ jobs:
               sudo usermod -aG docker $USER
             fi
 
-            # -----------------------------
-            # Login to Amazon ECR
-            # -----------------------------
             echo "Logging in to Amazon ECR..."
             aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
 
-            # -----------------------------
-            # Stop and remove old container
-            # -----------------------------
             echo "Stopping and removing old container..."
             docker stop movie-service || true
             docker rm movie-service || true
-
-            # -----------------------------
-            # Pull latest image
-            # -----------------------------
+            
             echo "Pulling latest image from ECR..."
             docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-            # -----------------------------
-            # Run new container with all env vars
-            # -----------------------------
             echo "Running new container..."
-            echo "DB_URL=$DB_URL"
+            echo "DB_URL='$DB_URL'"
             docker run -d --name movie-service \
               -e DB_URL="$DB_URL" \
               -e DB_USERNAME="$DB_USERNAME" \
